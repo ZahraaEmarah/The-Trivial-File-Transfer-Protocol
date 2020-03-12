@@ -90,15 +90,19 @@ class TftpProcessor(object):
         """
         return len(self.packet_buffer) != 0
 
-    def request_file(self, file_path_on_server):
-        """
-        This method is only valid if you're implementing
-        a TFTP client, since the client requests or uploads
-        a file to/from a server, one of the inputs the client
-        accept is the file name. Remove this function if you're
-        implementing a server.
-        """
-        pass
+    @staticmethod
+    def request_file(file_path_on_server):
+        mode_bytes = "octet".encode()
+        file_name_bytes = file_path_on_server.encode()
+        # Encoding the MODE and File Name strings to bytes
+        # Then converting to List to concatenate in byte array
+        file_name_bytes = list(file_name_bytes)
+        mode_bytes = list(mode_bytes)
+
+        # Create the RRQ byte array
+        byte_array_rrq = bytearray([0, 1] + file_name_bytes + [0] + mode_bytes + [0])
+
+        return byte_array_rrq
 
     def upload_file(self, file_path_on_server):
         """
@@ -109,6 +113,9 @@ class TftpProcessor(object):
         implementing a server.
         """
         pass
+
+
+processor = TftpProcessor()
 
 
 def check_file_name():
@@ -150,6 +157,14 @@ def parse_user_input(address, operation, file_name=None):
         pass
     elif operation == "pull":
         print(f"Attempting to download [{file_name}]...")
+        byte_array = processor.request_file(file_name)
+
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.sendto(byte_array, (address, 69))
+        msg_from_server = udp_socket.recvfrom(512)
+
+        # print (r_bytes.decode("utf-8"))
+        print(msg_from_server)
         pass
 
 
