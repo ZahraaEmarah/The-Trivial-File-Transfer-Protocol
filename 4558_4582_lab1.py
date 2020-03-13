@@ -30,7 +30,8 @@ class TftpProcessor(object):
         Represents a TFTP packet type add the missing types here and
         modify the existing values as necessary.
         """
-        # RRQ = 1
+        RRQ = 1
+
 
     def __init__(self):
         """
@@ -53,8 +54,8 @@ class TftpProcessor(object):
         # feel free to remove this line
         print(f"Received a packet from {packet_source}")
 
-        in_packet = self._parse_udp_packet(packet_data)     # Check type of packet
-        if in_packet == "DATA":                             # Save the incoming data
+        in_packet = self._parse_udp_packet(packet_data)  # Check type of packet
+        if in_packet == "DATA":  # Save the incoming data
             data_bytes = packet_data[4:len(packet_data)]
             data_bytes = bytes(data_bytes)
             f = open(self.file_name, "ab")
@@ -66,8 +67,7 @@ class TftpProcessor(object):
         # This shouldn't change.
         self.packet_buffer.append(out_packet)
 
-    @staticmethod
-    def _parse_udp_packet(packet_bytes):
+    def _parse_udp_packet(self, packet_bytes):
         if packet_bytes[1] == 3:
             return "DATA"
         elif packet_bytes[1] == 4:
@@ -117,6 +117,7 @@ class TftpProcessor(object):
         return len(self.packet_buffer) != 0
 
     def request_file(self, file_path_on_server):
+
         self.file_name = file_path_on_server
         f = open(file_path_on_server, "wb")  # Create initial file
         f.close()
@@ -131,14 +132,17 @@ class TftpProcessor(object):
         return byte_array_rrq
 
     def upload_file(self, file_path_on_server):
-        """
-        This method is only valid if you're implementing
-        a TFTP client, since the client requests or uploads
-        a file to/from a server, one of the inputs the client
-        accept is the file name. Remove this function if you're
-        implementing a server.
-        """
-        pass
+
+        mode_bytes = "octet".encode()
+        file_name_bytes = file_path_on_server.encode()
+        file_name_bytes = list(file_name_bytes)
+        mode_bytes = list(mode_bytes)
+
+        # Create the WRQ
+        byte_array_wrq = bytearray([0, 2] + file_name_bytes + [0] + mode_bytes + [0])
+        print("sending")
+        print(byte_array_wrq)
+        return byte_array_wrq
 
 
 processor = TftpProcessor()
@@ -180,7 +184,32 @@ def parse_user_input(address, operation, file_name=None):
     # functionality is preserved.
     if operation == "push":
         print(f"Attempting to upload [{file_name}]...")
+        byte_array = processor.upload_file(file_name)
+
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.sendto(byte_array, (address, 69))
+        data, server = udp_socket.recvfrom(4096)
+        print('server: {!r}'.format(data))
+
+        # Create the DATA packet byte array
+        file_array = list(open(file_name, "rb").read())
+        size_of_file = os.path.getsize(file_name)
+        number_of_blocks = int(size_of_file / 512) + 1
+        print("size is ")
+        print(number_of_blocks)
+        print(size_of_file)
+
+        for x in range(1, number_of_blocks+1):
+
+            block_no = list(x.to_bytes(2, 'big'))
+            byte_array_data = bytearray([0, 3] + block_no + file_array)
+            udp_socket.sendto(byte_array_data, server)
+            data, server = udp_socket.recvfrom(4096)
+
+        udp_socket.close()
         pass
+
+
     elif operation == "pull":
         print(f"Attempting to download [{file_name}]...")
         byte_array = processor.request_file(file_name)
@@ -227,9 +256,9 @@ def get_arg(param_index, default=None):
 
 def main():
     """
-     Write your code above this function.
-    if you need the command line arguments
-    """
+        Write your code above this function.
+       if you need the command line arguments
+       """
     print("*" * 50)
     print("[LOG] Printing command line arguments\n", ",".join(sys.argv))
     check_file_name()
@@ -241,8 +270,8 @@ def main():
     # The IP of the server, some default values
     # are provided. Feel free to modify them.
     ip_address = get_arg(1, "127.0.0.1")
-    operation = get_arg(2, "pull")
-    file_name = get_arg(3, "test.txt")
+    operation = get_arg(2, "push")
+    file_name = get_arg(3, "file.txt")
 
     # Modify this as needed.
     parse_user_input(ip_address, operation, file_name)
