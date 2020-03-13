@@ -30,8 +30,7 @@ class TftpProcessor(object):
         Represents a TFTP packet type add the missing types here and
         modify the existing values as necessary.
         """
-        RRQ = 1
-        # WRQ to be added
+        # RRQ = 1
 
     def __init__(self):
         """
@@ -40,6 +39,7 @@ class TftpProcessor(object):
         Here's an example of what you can do inside this function.
         """
         self.packet_buffer = []
+        self.file_name = ""
         pass
 
     def process_udp_packet(self, packet_data, packet_source):
@@ -52,18 +52,44 @@ class TftpProcessor(object):
         # add the packet to be sent to self.packet_buffer
         # feel free to remove this line
         print(f"Received a packet from {packet_source}")
-        in_packet = self._parse_udp_packet(packet_data)
+
+        in_packet = self._parse_udp_packet(packet_data)     # Check type of packet
+        if in_packet == "DATA":                             # Save the incoming data
+            data_bytes = packet_data[4:len(packet_data)]
+            data_bytes = bytes(data_bytes)
+            f = open(self.file_name, "ab")
+            f.write(data_bytes)
+            f.close()
+
         out_packet = self._do_some_logic(in_packet)
 
         # This shouldn't change.
         self.packet_buffer.append(out_packet)
 
-    def _parse_udp_packet(self, packet_bytes):
-        """
-        You'll use the struct module here to determine
-        the type of the packet and extract other available
-        information.
-        """
+    @staticmethod
+    def _parse_udp_packet(packet_bytes):
+        if packet_bytes[1] == 3:
+            return "DATA"
+        elif packet_bytes[1] == 4:
+            return "ACK"
+        elif packet_bytes[1] == 4:
+            if packet_bytes[3] == 0:
+                print("ERROR: Not defined")
+            elif packet_bytes[3] == 1:
+                print("ERROR: File not found.")
+            elif packet_bytes[3] == 2:
+                print("ERROR: Access violation.")
+            elif packet_bytes[3] == 3:
+                print("ERROR: Disk full or allocation exceeded.")
+            elif packet_bytes[3] == 4:
+                print("ERROR: Illegal TFTP operation.")
+            elif packet_bytes[3] == 5:
+                print("ERROR: Unknown transfer ID.")
+            elif packet_bytes[3] == 6:
+                print("ERROR: File already exists.")
+            elif packet_bytes[3] == 7:
+                print("ERROR: No such user.")
+            return "ERROR"
         pass
 
     def _do_some_logic(self, input_packet):
@@ -90,14 +116,14 @@ class TftpProcessor(object):
         """
         return len(self.packet_buffer) != 0
 
-    @staticmethod
-    def request_file(file_path_on_server):
+    def request_file(self, file_path_on_server):
+        self.file_name = file_path_on_server
+        f = open(file_path_on_server, "wb")  # Create initial file
+        f.close()
         mode_bytes = "octet".encode()
-        file_name_bytes = file_path_on_server.encode()
-        # Encoding the MODE and File Name strings to bytes
-        # Then converting to List to concatenate in byte array
-        file_name_bytes = list(file_name_bytes)
         mode_bytes = list(mode_bytes)
+        file_name_bytes = file_path_on_server.encode()
+        file_name_bytes = list(file_name_bytes)
 
         # Create the RRQ byte array
         byte_array_rrq = bytearray([0, 1] + file_name_bytes + [0] + mode_bytes + [0])
@@ -161,10 +187,22 @@ def parse_user_input(address, operation, file_name=None):
 
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_socket.sendto(byte_array, (address, 69))
-        msg_from_server = udp_socket.recvfrom(512)
 
-        # print (r_bytes.decode("utf-8"))
-        print(msg_from_server)
+        while True:
+            msg_from_server, server = udp_socket.recvfrom(1024)
+            if not msg_from_server:
+                break
+
+            print(msg_from_server)
+            msg_from_server = list(msg_from_server)
+            byte_array_ack = bytearray([0, 4, msg_from_server[2], msg_from_server[3]])
+            udp_socket.sendto(byte_array_ack, server)  # Send the Acknowledgment
+
+            # Process the received packet
+            processor.process_udp_packet(msg_from_server, address)
+
+        udp_socket.close()
+
         pass
 
 
