@@ -52,13 +52,15 @@ class TftpProcessor(object):
         # Add your logic here, after your logic is done,
         # add the packet to be sent to self.packet_buffer
         # feel free to remove this line
-        print(f"Received a packet from {packet_source}")
+        # print(f"Received a packet from {packet_source}")
 
         in_packet = self._parse_udp_packet(packet_data)  # Check type of packet
 
         if in_packet == "DATA":  # Save the incoming data
             data_bytes = self._do_some_logic(packet_data)
             return data_bytes
+
+        return in_packet
 
     @staticmethod
     def _parse_udp_packet(packet_bytes):
@@ -139,8 +141,6 @@ class TftpProcessor(object):
 
         # Create the WRQ
         byte_array_wrq = bytearray([0, 2] + file_name_bytes + [0] + mode_bytes + [0])
-        print("sending")
-        print(byte_array_wrq)
         return byte_array_wrq
 
 
@@ -181,29 +181,29 @@ def parse_user_input(address, operation, file_name=None):
 
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_socket.sendto(byte_array, (address, 69))
+        print("[CLIENT] Write Request sent")
         data, server = udp_socket.recvfrom(1024)
 
-        if data[1] == 4:  # ACK is received
+        recv = processor.process_udp_packet(data, address)
+        print("[SERVER]", recv)  # ACK is received
 
-            # Create the DATA packet byte array
-            file_array = list(open(file_name, "rb").read())
-            size_of_file = os.path.getsize(file_name)
+        # Create the DATA packet byte array
+        file_array = list(open(file_name, "rb").read())
+        # stackoverflow
+        data_package = [file_array[i:i+512] for i in range(0, len(file_array), 512)]
 
-            print("size is", size_of_file)
+        if recv == "ACK":
+            for x in range(1, data_package.__len__()+1):
 
-            # stackoverflow
-            data_package = [file_array[i:i + 512] for i in range(0, len(file_array), 512)]
-
-            for x in range(1, data_package.__len__() + 1):
                 block_no = list(x.to_bytes(2, 'big'))
                 byte_array_data = bytearray([0, 3] + block_no + list(data_package[x - 1]))
                 udp_socket.sendto(byte_array_data, server)
                 data, server = udp_socket.recvfrom(1024)
+                recv = processor.process_udp_packet(data, address)
+                if recv != "ACK":
+                    print(recv)
 
-            udp_socket.close()
-
-        else:
-            print("Error")
+        udp_socket.close()
 
         pass
 
