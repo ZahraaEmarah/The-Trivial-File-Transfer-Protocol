@@ -43,7 +43,7 @@ class TftpProcessor(object):
         self.file_name = ""
         pass
 
-    def process_udp_packet(self, packet_data, packet_source):
+    def process_udp_packet(self, packet_data):
         """
         Parse the input packet, execute your logic according to that packet.
         packet data is a bytearray, packet source contains the address
@@ -184,7 +184,7 @@ def parse_user_input(address, operation, file_name=None):
         print("[CLIENT] Write Request sent")
         data, server = udp_socket.recvfrom(1024)
 
-        recv = processor.process_udp_packet(data, address)
+        recv = processor.process_udp_packet(data)
         print("[SERVER]", recv)  # ACK is received
 
         # Create the DATA packet byte array
@@ -199,7 +199,7 @@ def parse_user_input(address, operation, file_name=None):
                 byte_array_data = bytearray([0, 3] + block_no + list(data_package[x - 1]))
                 udp_socket.sendto(byte_array_data, server)
                 data, server = udp_socket.recvfrom(1024)
-                recv = processor.process_udp_packet(data, address)
+                recv = processor.process_udp_packet(data)
                 if recv != "ACK":
                     print(recv)
 
@@ -222,7 +222,7 @@ def parse_user_input(address, operation, file_name=None):
             udp_socket.sendto(byte_array_ack, server)  # Send the Acknowledgment
 
             # Process the received packet
-            processor.process_udp_packet(msg_from_server, address)
+            processor.process_udp_packet(msg_from_server)
             if len(msg_from_server) < 512:  # End of file
                 break
         f = open(file_name, "ab")
