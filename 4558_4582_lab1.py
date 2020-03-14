@@ -2,7 +2,6 @@ import sys
 import os
 import enum
 import socket
-from sys import argv
 
 
 class TftpProcessor(object):
@@ -32,7 +31,7 @@ class TftpProcessor(object):
         modify the existing values as necessary.
         """
         RRQ = 1
-
+        WRQ = 2
 
     def __init__(self):
         """
@@ -68,7 +67,8 @@ class TftpProcessor(object):
         # This shouldn't change.
         self.packet_buffer.append(out_packet)
 
-    def _parse_udp_packet(self, packet_bytes):
+    @staticmethod
+    def _parse_udp_packet(packet_bytes):
         if packet_bytes[1] == 3:
             return "DATA"
         elif packet_bytes[1] == 4:
@@ -133,7 +133,7 @@ class TftpProcessor(object):
         return byte_array_rrq
 
     def upload_file(self, file_path_on_server):
-
+        self.file_name = file_path_on_server
         mode_bytes = "octet".encode()
         file_name_bytes = file_path_on_server.encode()
         file_name_bytes = list(file_name_bytes)
@@ -141,7 +141,8 @@ class TftpProcessor(object):
 
         # Create the WRQ
         byte_array_wrq = bytearray([0, 2] + file_name_bytes + [0] + mode_bytes + [0])
-
+        print("sending")
+        print(byte_array_wrq)
         return byte_array_wrq
 
 
@@ -157,7 +158,7 @@ def check_file_name():
     pass
 
 
-def setup_sockets(address):
+def setup_sockets():
     """
     Socket logic MUST NOT be written in the TftpProcessor
     class. It knows nothing about the sockets.
@@ -176,12 +177,6 @@ def do_socket_logic():
 
 
 def parse_user_input(address, operation, file_name=None):
-    # Your socket logic can go here,
-    # you can surely add new functions
-    # to contain the socket code.
-    # But don't add socket code in the TftpProcessor class.
-    # Feel free to delete this code as long as the
-    # functionality is preserved.
     if operation == "push":
         print(f"Attempting to upload [{file_name}]...")
         byte_array = processor.upload_file(file_name)
@@ -199,12 +194,11 @@ def parse_user_input(address, operation, file_name=None):
             print("size is", size_of_file)
 
             # stackoverflow
-            data_package = [file_array[i:i+512] for i in range(0, len(file_array), 512)]
+            data_package = [file_array[i:i + 512] for i in range(0, len(file_array), 512)]
 
-            for x in range(1, data_package.__len__()+1):
-
+            for x in range(1, data_package.__len__() + 1):
                 block_no = list(x.to_bytes(2, 'big'))
-                byte_array_data = bytearray([0, 3] + block_no + list(data_package[x-1]))
+                byte_array_data = bytearray([0, 3] + block_no + list(data_package[x - 1]))
                 udp_socket.sendto(byte_array_data, server)
                 data, server = udp_socket.recvfrom(1024)
 
@@ -216,26 +210,25 @@ def parse_user_input(address, operation, file_name=None):
         pass
 
     elif operation == "pull":
-
         print(f"Attempting to download [{file_name}]...")
-        byte_array = processor.request_file(file_name)
+        byte_array_rrq = processor.request_file(file_name)
 
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.sendto(byte_array, (address, 69))
+        udp_socket.sendto(byte_array_rrq, (address, 69))
 
         while True:
             msg_from_server, server = udp_socket.recvfrom(1024)
-            if not msg_from_server:
-                break
-
-            print(msg_from_server)
+            # print(msg_from_server)
             msg_from_server = list(msg_from_server)
             byte_array_ack = bytearray([0, 4, msg_from_server[2], msg_from_server[3]])
             udp_socket.sendto(byte_array_ack, server)  # Send the Acknowledgment
 
             # Process the received packet
             processor.process_udp_packet(msg_from_server, address)
-
+            if len(msg_from_server) < 512:      # End of file
+                break
+        print("*" * 50)
+        print("\nDownload complete!")   
         udp_socket.close()
 
         pass
@@ -264,27 +257,18 @@ def main():
     """
         Write your code above this function.
        if you need the command line arguments
-       """
+    """
+    name, ip_address, operation, file_name = sys.argv
+
     print("*" * 50)
     print("[LOG] Printing command line arguments\n", ",".join(sys.argv))
     check_file_name()
     print("*" * 50)
 
-    # This argument is required.
-    # For a server, this means the IP that the server socket
-    # will use.
-    # The IP of the server, some default values
-    # are provided. Feel free to modify them.
+    # ip_address = get_arg(1, "127.0.0.1")
+    # operation = get_arg(2, "pull")
+    # file_name = get_arg(3, "file.txt")
 
-    ip_address = get_arg(1, "127.0.0.1")
-    operation = get_arg(2, "push")
-    file_name = get_arg(3, "test.txt")
-
-    """""
-    ip_address, operation, file_name = argv
-   
-    """""
-    # Modify this as needed.
     parse_user_input(ip_address, operation, file_name)
 
 
