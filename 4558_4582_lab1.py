@@ -2,6 +2,7 @@ import sys
 import os
 import enum
 import socket
+from sys import argv
 
 
 class TftpProcessor(object):
@@ -140,8 +141,7 @@ class TftpProcessor(object):
 
         # Create the WRQ
         byte_array_wrq = bytearray([0, 2] + file_name_bytes + [0] + mode_bytes + [0])
-        print("sending")
-        print(byte_array_wrq)
+
         return byte_array_wrq
 
 
@@ -188,29 +188,35 @@ def parse_user_input(address, operation, file_name=None):
 
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_socket.sendto(byte_array, (address, 69))
-        data, server = udp_socket.recvfrom(4096)
-        print('server: {!r}'.format(data))
+        data, server = udp_socket.recvfrom(1024)
 
-        # Create the DATA packet byte array
-        file_array = list(open(file_name, "rb").read())
-        size_of_file = os.path.getsize(file_name)
-        number_of_blocks = int(size_of_file / 512) + 1
-        print("size is ")
-        print(number_of_blocks)
-        print(size_of_file)
+        if data[1] == 4:  # ACK is received
 
-        for x in range(1, number_of_blocks+1):
+            # Create the DATA packet byte array
+            file_array = list(open(file_name, "rb").read())
+            size_of_file = os.path.getsize(file_name)
 
-            block_no = list(x.to_bytes(2, 'big'))
-            byte_array_data = bytearray([0, 3] + block_no + file_array)
-            udp_socket.sendto(byte_array_data, server)
-            data, server = udp_socket.recvfrom(4096)
+            print("size is", size_of_file)
 
-        udp_socket.close()
+            # stackoverflow
+            data_package = [file_array[i:i+512] for i in range(0, len(file_array), 512)]
+
+            for x in range(1, data_package.__len__()+1):
+
+                block_no = list(x.to_bytes(2, 'big'))
+                byte_array_data = bytearray([0, 3] + block_no + list(data_package[x-1]))
+                udp_socket.sendto(byte_array_data, server)
+                data, server = udp_socket.recvfrom(1024)
+
+            udp_socket.close()
+
+        else:
+            print("Error")
+
         pass
 
-
     elif operation == "pull":
+
         print(f"Attempting to download [{file_name}]...")
         byte_array = processor.request_file(file_name)
 
@@ -269,10 +275,15 @@ def main():
     # will use.
     # The IP of the server, some default values
     # are provided. Feel free to modify them.
+
     ip_address = get_arg(1, "127.0.0.1")
     operation = get_arg(2, "push")
-    file_name = get_arg(3, "file.txt")
+    file_name = get_arg(3, "test.txt")
 
+    """""
+    ip_address, operation, file_name = argv
+   
+    """""
     # Modify this as needed.
     parse_user_input(ip_address, operation, file_name)
 
