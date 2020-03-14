@@ -55,17 +55,10 @@ class TftpProcessor(object):
         print(f"Received a packet from {packet_source}")
 
         in_packet = self._parse_udp_packet(packet_data)  # Check type of packet
+
         if in_packet == "DATA":  # Save the incoming data
-            data_bytes = packet_data[4:len(packet_data)]
-            data_bytes = bytes(data_bytes)
-            f = open(self.file_name, "ab")
-            f.write(data_bytes)
-            f.close()
-
-        out_packet = self._do_some_logic(in_packet)
-
-        # This shouldn't change.
-        self.packet_buffer.append(out_packet)
+            data_bytes = self._do_some_logic(packet_data)
+            return data_bytes
 
     @staticmethod
     def _parse_udp_packet(packet_bytes):
@@ -93,10 +86,15 @@ class TftpProcessor(object):
             return "ERROR"
         pass
 
-    def _do_some_logic(self, input_packet):
+    def _do_some_logic(self, packet_data):
         """
         Example of a private function that does some logic.
         """
+        data_bytes = packet_data[4:len(packet_data)]
+        data_bytes = bytes(data_bytes)
+        self.packet_buffer.append(data_bytes)
+        return data_bytes
+
         pass
 
     def get_next_output_packet(self):
@@ -225,10 +223,15 @@ def parse_user_input(address, operation, file_name=None):
 
             # Process the received packet
             processor.process_udp_packet(msg_from_server, address)
-            if len(msg_from_server) < 512:      # End of file
+            if len(msg_from_server) < 512:  # End of file
                 break
+        f = open(file_name, "ab")
+        for i in range(0, len(processor.packet_buffer)):
+            f.write(processor.packet_buffer[i])
+
+        f.close()
         print("*" * 50)
-        print("\nDownload complete!")   
+        print("\nDownload complete!")
         udp_socket.close()
 
         pass
